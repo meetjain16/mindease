@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recorder</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            box-sizing: border-box;
+        }
+        
+        .circle {
+            width: 150px;
+            height: 150px;
+            background-color: #3498db;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+            transition: transform 0.3s ease, background-color 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .circle.recording {
+            background-color: #e74c3c;
+            transform: scale(1.1);
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1.1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1.1); }
+        }
+        
+        button {
+            padding: 12px 24px;
+            font-size: 16px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        button:hover {
+            background-color: #27ae60;
+        }
+        
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+            text-align: center;
+        }
+        
+        #recordings {
+            margin-top: 40px;
+            width: 80%;
+            max-width: 500px;
+        }
+        
+        .recording-item {
+            background-color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .recording-item audio {
+            width: 100%;
+            margin-top: 10px;
+        }
+        
+        h1 {
+            margin-bottom: 30px;
+            color: #2c3e50;
+        }
+        
+        .debug-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #666;
+            width: 80%;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Voice Recorder</h1>
+    
+    <div class="circle" id="recordingCircle"></div>
+    
+    <button id="recordButton">Start Recording</button>
+    
+    <div id="status">Ready to record</div>
+    
+    <div id="recordings">
+        <h2>Your Recordings</h2>
+        <!-- Recordings will be added here dynamically -->
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const recordButton = document.getElementById('recordButton');
+            const recordingCircle = document.getElementById('recordingCircle');
+            const statusDisplay = document.getElementById('status');
+            const recordingsContainer = document.getElementById('recordings');
+            
+            let isRecording = false;
+            let mediaRecorder;
+            let audioChunks = [];
+
+            async function fetchAndPlayOutput() {
+    try {
+        const response = await fetch('/get_output');  
+        const data = await response.json();
+        console.log(data);
+        console.log(data.output)
+
+        if(data && data.output && data.output.url) {
+            const audio = new Audio(data.output.url);
+            audio.play();
+        } else {
+            console.log('No output audio found');
+        }
+
+    } catch (error) {
+        console.error('Error fetching output:', error);
+    }
+}
+
+
+            // Function to fetch and display existing recordings
+            async function loadRecordings() {
+                try {
+                    statusDisplay.textContent = 'Loading recordings...';
+                    const response = await fetch('/get_recordings');
+                    const data = await response.json();
+                    
+                    // Remove all recording items
+                    const recordingItems = recordingsContainer.querySelectorAll('.recording-item');
+                    recordingItems.forEach(item => item.remove());
+                    
+                    // Add each recording
+                    if (data.recordings && data.recordings.length > 0) {
+                        data.recordings.forEach(recording => {
+                            const recordingItem = document.createElement('div');
+                            recordingItem.className = 'recording-item';
+                            
+                            const recordingName = document.createElement('div');
+                            recordingName.textContent = recording.filename;
+                            
+                            const audioElement = document.createElement('audio');
+                            audioElement.controls = true;
+                            audioElement.src = recording.url;
+                            
+                            recordingItem.appendChild(recordingName);
+                            recordingItem.appendChild(audioElement);
+                            recordingsContainer.appendChild(recordingItem);
+                        });
+                        statusDisplay.textContent = 'Ready to record';
+                    } else {
+                        statusDisplay.textContent = 'No recordings found. Ready to record.';
+                    }
+                } catch (error) {
+                    console.error('Error loading recordings:', error);
+                    statusDisplay.textContent = 'Error loading recordings. Ready to record.';
+                }
+            }
+            
+            // Check browser compatibility
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusDisplay.textContent = 'Your browser does not support audio recording';
+                recordButton.disabled = true;
+            }
+            
+            // Load recordings on page load
+            //loadRecordings();
+            
+            recordButton.addEventListener('click', async function() {
+                if (!isRecording) {
+                    // Start recording
+                    try {
+                        recordButton.disabled = true;
+                        statusDisplay.textContent = 'Requesting microphone access...';
+                        
+                        const stream = await navigator.mediaDevices.getUserMedia({ 
+                            audio: true,
+                            video: false
+                        });
+                        
+                        mediaRecorder = new MediaRecorder(stream);
+                        audioChunks = [];
+                        
+                        mediaRecorder.addEventListener('dataavailable', event => {
+                            if (event.data.size > 0) {
+                                audioChunks.push(event.data);
+                            }
+                        });
+                        
+                        mediaRecorder.addEventListener('stop', async () => {
+                            statusDisplay.textContent = 'Processing recording...';
+                            
+                            try {
+                                // Create audio blob and send to server
+                                const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                                const formData = new FormData();
+                                formData.append('audio', audioBlob, 'recording.wav');
+                                
+                                const response = await fetch('/save_recording', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                
+                                const result = await response.json();
+                                
+                                if (result.success) {
+                                    statusDisplay.textContent = 'Recording saved successfully!';
+                                    
+                                    //loadRecordings();
+                                    await fetchAndPlayOutput();
+                                } else {
+                                    statusDisplay.textContent = 'Error saving recording: ' + result.error;
+                                }
+                            } catch (error) {
+                                statusDisplay.textContent = 'Error saving recording: ' + error.message;
+                                console.error('Error:', error);
+                            }
+                            
+                            // Stop all audio tracks
+                            stream.getTracks().forEach(track => track.stop());
+                            recordButton.disabled = false;
+                        });
+                        
+                        // Start recording with a 1-second interval for data chunks
+                        mediaRecorder.start(1000);
+                        isRecording = true;
+                        recordButton.textContent = 'Stop Recording';
+                        recordButton.disabled = false;
+                        recordingCircle.classList.add('recording');
+                        statusDisplay.textContent = 'Recording...';
+                        
+                    } catch (error) {
+                        statusDisplay.textContent = 'Error accessing microphone: ' + error.message;
+                        console.error('Error accessing microphone:', error);
+                        recordButton.disabled = false;
+                    }
+                } else {
+                    // Stop recording
+                    recordButton.disabled = true;
+                    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                        mediaRecorder.stop();
+                    }
+                    
+                    isRecording = false;
+                    recordButton.textContent = 'Start Recording';
+                    recordingCircle.classList.remove('recording');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mental Health Agent Prototype</title>
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background: #0f172a;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      flex-direction: column;
+    }
+
+    .circle {
+      width: 150px;
+      height: 150px;
+      border-radius: 50%;
+      background: #38bdf8;
+      margin-bottom: 30px;
+      transition: transform 0.3s ease-in-out;
+    }
+
+    .listening {
+      animation: pulse 2s infinite;
+    }
+
+    .speaking {
+      animation: pulse 0.7s infinite;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+      100% { transform: scale(1); }
+    }
+
+    button {
+      padding: 10px 20px;
+      background: #38bdf8;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      color: #0f172a;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background: #0ea5e9;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="circle" id="circle"></div>
+
+  <button onclick="toggleState()">Start Listening</button>
+
+  <script>
+    let state = 'idle'; // idle, listening, speaking
+    const circle = document.getElementById('circle');
+    const button = document.querySelector('button');
+
+    function toggleState() {
+      if(state === 'idle') {
+        state = 'listening';
+        circle.className = 'circle listening';
+        button.innerText = 'Stop Listening & Speak';
+      } else if(state === 'listening') {
+        state = 'speaking';
+        circle.className = 'circle speaking';
+        button.innerText = 'Reset';
+      } else {
+        state = 'idle';
+        circle.className = 'circle';
+        button.innerText = 'Start Listening';
+      }
+    }
+  </script>
+
+</body>
+</html>
